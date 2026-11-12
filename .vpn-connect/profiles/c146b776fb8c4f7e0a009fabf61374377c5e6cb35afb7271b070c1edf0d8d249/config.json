@@ -1,0 +1,18 @@
+{
+    "Sources":  [
+                    {
+                        "Name":  "",
+                        "File":  "sub-black",
+                        "Url":  "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_VLESS_RUS_mobile.txt"
+                    },
+                    {
+                        "Name":  "",
+                        "File":  "sub-white",
+                        "Url":  "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile.txt"
+                    }
+                ],
+    "OutputFile":  "sub7",
+    "Excluded":  [
+
+                 ]
+}
