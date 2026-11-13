@@ -1,8 +1,6 @@
 #profile-title: VPN Connect
 #announce: base64:0KLQtdC70LXQs9GA0LDQvCDQutCw0L3QsNC7INCx0L7RgtCwOiBAVlBOQ29ubmVjdDIxQWNjZXNzQm90
-#support-url: https://t.me/velvet_support_robot
-#profile-web-page-url: https://tinyash.link/yXDJfMVpQqW3pTGh
-#profile-update-interval: 2
+#profile-update-interval: 6
 #subscription-userinfo: download=1655517075; total=1099511627776
 #providerid XUNBQ5Mv
 #notification-subs-expire: 0
