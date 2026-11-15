@@ -1,5 +1,6 @@
 ﻿Set-StrictMode -Version 2
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'JsonProfiles.ps1')
 
 function ConvertFrom-SubscriptionBase64([string]$Text) {
     $value = ($Text -replace '\s', '').Replace('-', '+').Replace('_', '/')
@@ -30,7 +31,8 @@ function Get-ServerFragment([string]$Link) {
 function Get-SubscriptionDocument([string]$Text) {
     $textValue = $Text.TrimStart([char]0xFEFF).Trim()
     if (-not $textValue) { throw 'Подписка пустая.' }
-    if ($textValue -match '^\s*[\[{<]') { throw 'Нужен текстовый список ссылок или Base64. JSON, HTML и Clash YAML эта версия не редактирует.' }
+    if($textValue -match '^\s*[\[{]'){return Read-HappJsonDocument $textValue}
+    if ($textValue -match '^\s*<') { throw 'Страница HTML не является подпиской.' }
     $decoded = $false
     if ($textValue -notmatch '(?im)^\s*(#|vless://|vmess://|trojan://|ss://|socks://|socks5://|hysteria2://|hy2://|tuic://)') {
         try { $textValue = ConvertFrom-SubscriptionBase64 $textValue; $decoded = $true }
@@ -108,6 +110,11 @@ function Set-ServerDescription([string]$Link, [string]$Description) {
 
 function Get-SubscriptionMetadataValue($Document, [string]$Key) {
     $value = ''
+    if($Document.PSObject.Properties['Format'] -and $Document.Format -eq 'HappJson'){
+        if($Document.Metadata.ContainsKey($Key)){$value=[string]$Document.Metadata[$Key]}
+        if($Key -eq 'announce' -and $value.StartsWith('base64:')){$value=ConvertFrom-SubscriptionBase64 $value.Substring(7)}
+        return $value
+    }
     $pattern = '^#\s*' + [regex]::Escape($Key) + '\s*:\s*(.*)$'
     if ($Key -eq 'providerid') {$pattern = '^#\s*providerid(?:\s*:\s*|\s+)(.*)$'}
     foreach ($line in $Document.Lines) {
@@ -152,6 +159,7 @@ function Remove-OldSubscriptionExpiry([string]$Text) {
 }
 
 function Edit-Subscription($Document, [hashtable]$Metadata, [string[]]$Names, [string[]]$Descriptions=$null, [int[]]$RemovedServers=@()) {
+    if($Document.PSObject.Properties['Format'] -and $Document.Format -eq 'HappJson'){return Edit-HappJsonDocument $Document $Metadata $Names $Descriptions $RemovedServers}
     if ($Names.Count -ne $Document.Servers.Count) { throw 'Количество имён не совпадает с количеством серверов.' }
     if ($null -ne $Descriptions -and $Descriptions.Count -ne $Document.Servers.Count) { throw 'Количество подписей не совпадает с количеством серверов.' }
     $removedIndices=New-Object 'System.Collections.Generic.HashSet[int]'
@@ -209,6 +217,17 @@ function Edit-Subscription($Document, [hashtable]$Metadata, [string[]]$Names, [s
 }
 
 function Get-SubscriptionSource([string]$Url, [switch]$PublicOnly) {
+    if(-not $PublicOnly -and ([Uri]$Url).Host -in @('tinyash.link','softelm.cc')){
+        Import-Module (Join-Path $PSScriptRoot 'CloudflareTools.psm1') -Force
+        $profile=Read-CloudflareProfile
+        if($profile){
+            try {
+                $body=@{sourceUrl=$Url}|ConvertTo-Json -Compress
+                $reply=Invoke-RestMethod -Method Post -Uri ($profile.Endpoint+'/api/source-preview') -Headers @{Authorization=('Bearer '+$profile.AdminToken)} -Body ([Text.Encoding]::UTF8.GetBytes($body)) -ContentType 'application/json' -TimeoutSec 25 -ErrorAction Stop
+                return Get-SubscriptionDocument ([string]$reply.content)
+            }catch{throw 'Не удалось загрузить полный набор Happ через ваше хранилище. Проверьте интернет и обновление сервиса Cloudflare.'}
+        }
+    }
     $uri = $null
     if (-not [Uri]::TryCreate($Url.Trim(), [UriKind]::Absolute, [ref]$uri) -or $uri.Scheme -ne 'https' -or $uri.UserInfo) { throw 'Укажите полную HTTPS-ссылку на подписку.' }
     if ($uri.Host -eq 'github.com' -and $uri.AbsolutePath -match '^/([^/]+)/([^/]+)/(?:blob|raw)/(.+)$') {
@@ -218,7 +237,7 @@ function Get-SubscriptionSource([string]$Url, [switch]$PublicOnly) {
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
     $client = New-Object System.Net.Http.HttpClient
     $client.Timeout = [TimeSpan]::FromSeconds(30)
-    $client.DefaultRequestHeaders.UserAgent.ParseAdd('VPN-Connect-Editor/1.0')
+    $client.DefaultRequestHeaders.UserAgent.ParseAdd($(if($PublicOnly){'VPN-Connect-Editor/1.0'}else{'Happ/2.0.0 (iOS)'}))
     try {
         $response = $client.GetAsync($Url, [Net.Http.HttpCompletionOption]::ResponseHeadersRead).GetAwaiter().GetResult()
         try {
@@ -245,6 +264,10 @@ function Get-SubscriptionSource([string]$Url, [switch]$PublicOnly) {
                 $body=$valid -join "`n"
             }
             $doc = Get-SubscriptionDocument $body
+            if($doc.PSObject.Properties['Format'] -and $doc.Format -eq 'HappJson'){
+                foreach($key in @('profile-title','announce','support-url','profile-web-page-url','profile-update-interval')){if($response.Headers.Contains($key)){$doc.Metadata[$key]=($response.Headers.GetValues($key) -join ', ') -replace '[\r\n]',''}}
+                return $doc
+            }
             $headerLines = @()
             foreach ($key in @('profile-title','announce','support-url','profile-web-page-url','profile-update-interval','subscription-userinfo','providerid','sub-expire','notification-subs-expire')) {
                 if (-not $PublicOnly -and $response.Headers.Contains($key) -and ($doc.Lines -join "`n") -notmatch ('(?im)^#\s*' + [regex]::Escape($key) + '(?:\s|:)')) {
