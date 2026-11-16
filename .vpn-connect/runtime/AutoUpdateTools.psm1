@@ -3,8 +3,7 @@ $ErrorActionPreference='Stop'
 
 function Get-PublicSources {
     @(
-        [pscustomobject]@{Name=''; File='sub-black'; Url='https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_VLESS_RUS_mobile.txt'},
-        [pscustomobject]@{Name=''; File='sub-white'; Url='https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile.txt'}
+        [pscustomobject]@{Name=''; File='source-free'; Url='https://is.wepogp.gay/bypass-hwid-lock-3z5O6BFAaJQzGlamvtSo?payload=LoWcw85kRd%2BHRAuaIWWTGaHlqIHCzpm8J09GWd0zeNMb%2BUDgv4dboD2VwU438QTP4MnqUeC52Cr1%2BwMypBkx2PeUWfpWpdOUvOeNWrBgAX98qiT06gURdNejXhujIa0P'}
     )
 }
 
