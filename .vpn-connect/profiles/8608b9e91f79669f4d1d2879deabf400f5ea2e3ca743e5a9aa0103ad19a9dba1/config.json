@@ -1,0 +1,13 @@
+{
+    "Sources":  [
+                    {
+                        "Name":  "",
+                        "File":  "source-free",
+                        "Url":  "https://raw.githubusercontent.com/PizdukMod/PizdukVPN/refs/heads/main/sub"
+                    }
+                ],
+    "OutputFile":  "sub11",
+    "Excluded":  [
+
+                 ]
+}
