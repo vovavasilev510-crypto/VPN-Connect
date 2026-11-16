@@ -1,7 +1,12 @@
 ﻿Set-StrictMode -Version 2
 $ErrorActionPreference='Stop'
 
-function Get-PublicSources {
+function Get-PublicSources([string]$SourceUrl='') {
+    if($SourceUrl){
+        $parsed=$null
+        if(-not [Uri]::TryCreate($SourceUrl,[UriKind]::Absolute,[ref]$parsed) -or $parsed.Scheme -ne 'https' -or $parsed.UserInfo){throw 'Укажите HTTPS-ссылку на публичную подписку.'}
+        return @([pscustomobject]@{Name='';File='source-free';Url=$SourceUrl})
+    }
     @(
         [pscustomobject]@{Name=''; File='source-free'; Url='https://is.wepogp.gay/bypass-hwid-lock-3z5O6BFAaJQzGlamvtSo?payload=LoWcw85kRd%2BHRAuaIWWTGaHlqIHCzpm8J09GWd0zeNMb%2BUDgv4dboD2VwU438QTP4MnqUeC52Cr1%2BwMypBkx2PeUWfpWpdOUvOeNWrBgAX98qiT06gURdNejXhujIa0P'}
     )
@@ -47,7 +52,7 @@ function Merge-PublicSubscriptions($Template, [object[]]$Sources, [object[]]$Doc
     return $outputs
 }
 
-function Get-AutomationLayout([string]$FilePath) {
+function Get-AutomationLayout([string]$FilePath,[string]$SourceUrl='') {
     if($FilePath -notmatch '^[A-Za-z0-9_-]+(?:/[A-Za-z0-9_-]+)*(?:\.[A-Za-z0-9_-]+)?$') {throw 'Файл: например sub, sub2 или subscriptions/family.txt. Используйте латиницу, цифры, дефис и подчёркивание.'}
     if(($FilePath -split '/')[0] -in @('SubscriptionTools.psm1','JsonProfiles.ps1','AutoUpdateTools.psm1','Update-PublicSubscriptions.ps1','sources.json','template.txt','AUTOUPDATE.html','Start.cmd')){throw 'Этот путь зарезервирован для файлов программы.'}
     $hash=[Security.Cryptography.SHA256]::Create()
@@ -56,18 +61,18 @@ function Get-AutomationLayout([string]$FilePath) {
     return [pscustomobject]@{Profile=('.vpn-connect/profiles/' + $id); Runtime='.vpn-connect/runtime'; FilePath=$FilePath}
 }
 
-function Get-CombinedPublicSource {
-    $sources=@(Get-PublicSources)
+function Get-CombinedPublicSource([string]$SourceUrl='') {
+    $sources=@(Get-PublicSources $SourceUrl)
     $docs=@(foreach($source in $sources){Get-SubscriptionSource $source.Url -PublicOnly})
     $merged=Merge-PublicSubscriptions $docs[0] $sources $docs
     return Get-SubscriptionDocument $merged['sub']
 }
 
-function Get-AutomationFiles([string]$Template,[string[]]$Excluded,[string]$FilePath) {
+function Get-AutomationFiles([string]$Template,[string[]]$Excluded,[string]$FilePath,[string]$SourceUrl='') {
     $layout=Get-AutomationLayout $FilePath
     $files=@{}
     $files[$layout.Profile + '/template.txt']=$Template
-    $files[$layout.Profile + '/config.json']=(@{OutputFile=$FilePath; Sources=@(Get-PublicSources); Excluded=@($Excluded)} | ConvertTo-Json -Depth 10)
+    $files[$layout.Profile + '/config.json']=(@{OutputFile=$FilePath; Sources=@(Get-PublicSources $SourceUrl); Excluded=@($Excluded)} | ConvertTo-Json -Depth 10)
     foreach($file in @('SubscriptionTools.psm1','JsonProfiles.ps1','AutoUpdateTools.psm1','Update-PublicSubscriptions.ps1')){
         $files[$layout.Runtime + '/' + $file]=[string][char]0xFEFF + [IO.File]::ReadAllText((Join-Path $PSScriptRoot $file))
     }
@@ -76,9 +81,9 @@ function Get-AutomationFiles([string]$Template,[string[]]$Excluded,[string]$File
     return $files
 }
 
-function Export-AutoUpdatePackage([string]$Destination,[string]$Template,[string[]]$Excluded=@(),[string]$FilePath='sub') {
+function Export-AutoUpdatePackage([string]$Destination,[string]$Template,[string[]]$Excluded=@(),[string]$FilePath='sub',[string]$SourceUrl='') {
     $null=Get-SubscriptionDocument $Template
-    $files=Get-AutomationFiles $Template $Excluded $FilePath
+    $files=Get-AutomationFiles $Template $Excluded $FilePath $SourceUrl
     $stage=Join-Path ([IO.Path]::GetTempPath()) ('vpn-update-' + [guid]::NewGuid().ToString('N'))
     $null=New-Item -ItemType Directory -Path (Join-Path $stage '.github/workflows') -Force
     try {
@@ -105,7 +110,7 @@ function Invoke-AutoGitHubRequest([string]$Token,[string]$Method,[string]$Path,$
     & (Get-Module SubscriptionTools) {param($t,$m,$p,$b) Invoke-GitHubRequest $t $m $p $b} $Token $Method $Path $Body
 }
 
-function Install-SubscriptionAutomation([string]$Token,[string]$Repository,[string]$Template,[string[]]$Excluded=@(),[bool]$AllowOverwrite=$false,[string]$FilePath='sub',[bool]$CreateIfMissing=$false) {
+function Install-SubscriptionAutomation([string]$Token,[string]$Repository,[string]$Template,[string[]]$Excluded=@(),[bool]$AllowOverwrite=$false,[string]$FilePath='sub',[bool]$CreateIfMissing=$false,[string]$SourceUrl='') {
     if(-not $Token.Trim()){throw 'Введите токен владельца или участника с доступом к репозиторию.'}
     if($Repository -match '^[A-Za-z0-9_-][A-Za-z0-9_.-]*$') {
         try {$account=Invoke-AutoGitHubRequest $Token GET '/user'; $Repository=[string]$account.login + '/' + $Repository}
@@ -115,11 +120,11 @@ function Install-SubscriptionAutomation([string]$Token,[string]$Repository,[stri
     $layout=Get-AutomationLayout $FilePath
     if(-not $AllowOverwrite){throw 'Отметьте разрешение замены подписки и файлов автоматики.'}
     $templateDoc=Get-SubscriptionDocument $Template
-    $sources=@(Get-PublicSources)
+    $sources=@(Get-PublicSources $SourceUrl)
     # Validate both public sources before making any GitHub changes.
     $docs=@(foreach($source in $sources){Get-SubscriptionSource $source.Url -PublicOnly})
     $outputs=Merge-PublicSubscriptions $templateDoc $sources $docs $Excluded
-    $files=Get-AutomationFiles $Template $Excluded $FilePath
+    $files=Get-AutomationFiles $Template $Excluded $FilePath $SourceUrl
     $files[$FilePath]=$outputs['sub']
     $base='/repos/' + $Repository
     try {
