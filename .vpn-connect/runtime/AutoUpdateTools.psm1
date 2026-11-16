@@ -50,7 +50,7 @@ function Merge-PublicSubscriptions($Template, [object[]]$Sources, [object[]]$Doc
 
 function Get-AutomationLayout([string]$FilePath) {
     if($FilePath -notmatch '^[A-Za-z0-9_-]+(?:/[A-Za-z0-9_-]+)*(?:\.[A-Za-z0-9_-]+)?$') {throw 'Файл: например sub, sub2 или subscriptions/family.txt. Используйте латиницу, цифры, дефис и подчёркивание.'}
-    if(($FilePath -split '/')[0] -in @('SubscriptionTools.psm1','AutoUpdateTools.psm1','Update-PublicSubscriptions.ps1','sources.json','template.txt','AUTOUPDATE.html','Start.cmd')){throw 'Этот путь зарезервирован для файлов программы.'}
+    if(($FilePath -split '/')[0] -in @('SubscriptionTools.psm1','JsonProfiles.ps1','AutoUpdateTools.psm1','Update-PublicSubscriptions.ps1','sources.json','template.txt','AUTOUPDATE.html','Start.cmd')){throw 'Этот путь зарезервирован для файлов программы.'}
     $hash=[Security.Cryptography.SHA256]::Create()
     try {$id=([BitConverter]::ToString($hash.ComputeHash([Text.Encoding]::UTF8.GetBytes($FilePath.ToLowerInvariant())))).Replace('-','').ToLowerInvariant()}
     finally {$hash.Dispose()}
@@ -69,7 +69,7 @@ function Get-AutomationFiles([string]$Template,[string[]]$Excluded,[string]$File
     $files=@{}
     $files[$layout.Profile + '/template.txt']=$Template
     $files[$layout.Profile + '/config.json']=(@{OutputFile=$FilePath; Sources=@(Get-PublicSources); Excluded=@($Excluded)} | ConvertTo-Json -Depth 10)
-    foreach($file in @('SubscriptionTools.psm1','AutoUpdateTools.psm1','Update-PublicSubscriptions.ps1')){
+    foreach($file in @('SubscriptionTools.psm1','JsonProfiles.ps1','AutoUpdateTools.psm1','Update-PublicSubscriptions.ps1')){
         $files[$layout.Runtime + '/' + $file]=[string][char]0xFEFF + [IO.File]::ReadAllText((Join-Path $PSScriptRoot $file))
     }
     $files['.github/workflows/update-subscriptions.yml']=[IO.File]::ReadAllText((Join-Path $PSScriptRoot 'update-subscriptions.yml'))
